@@ -520,7 +520,7 @@ function downloadFile(fileName, fileUrl, callback) {
 // ------- 进程启动与自检（替代 nohup + exec 的静默模式） -------
 const runningProcesses = [];
 
-function launchProcess(name, binPath, args, logFile) {
+function launchProcess(name, binPath, args, logFile, record) {
   return new Promise((resolve) => {
     if (!fs.existsSync(binPath)) {
       console.error(`[${name}] binary not found: ${binPath}`);
@@ -554,7 +554,12 @@ function launchProcess(name, binPath, args, logFile) {
       console.error(`[${name}] spawn error: ${err.code || err.message}${hint}`);
     });
     child.unref();
-    runningProcesses.push({ name, child, logFile });
+    const rec = record || { name, binPath, args, logFile, restarts: 0 };
+    rec.child = child;
+    rec.binPath = binPath;
+    rec.args = args;
+    rec.logFile = logFile;
+    if (!record) runningProcesses.push(rec);
 
     setTimeout(() => {
       if (spawnError) return resolve(null);
@@ -593,7 +598,7 @@ function checkTcp(host, port, timeout = 2000) {
 
 // 启动后自检：端口是否监听、隧道是否连上、各进程日志尾部
 async function reportRuntimeStatus() {
-  await new Promise((r) => setTimeout(r, 8000));
+  await new Promise((r) => setTimeout(r, 15000));
 
   const ports = [parseInt(ARGO_PORT)];
   if (isValidPort(REALITY_PORT)) ports.push(parseInt(REALITY_PORT));
@@ -611,6 +616,8 @@ async function reportRuntimeStatus() {
       console.log('cloudflared: tunnel connected');
     } else if (/error|failed|ERR/i.test(bootLog)) {
       console.error('cloudflared: tunnel FAILED, see the log above');
+    } else {
+      console.log('cloudflared: 仍在建立连接（日志暂未出现 Registered tunnel connection）');
     }
   }
 
@@ -618,6 +625,28 @@ async function reportRuntimeStatus() {
     const text = tailFile(logFile, 8);
     if (text) console.log(`---- ${name} runtime log ----\n${text}`);
   }
+}
+
+// 持续看护：进程退出自动重启（最多 5 次），并周期性输出 cloudflared 日志尾部
+function attachWatchdog() {
+  let lastBootTail = '';
+  setInterval(async () => {
+    for (const p of runningProcesses) {
+      if (!p || !p.child || p.child.exitCode === null) continue;
+      if ((p.restarts || 0) >= 5) continue;
+      p.restarts = (p.restarts || 0) + 1;
+      console.error(`[${p.name}] died (code=${p.child.exitCode}), restart #${p.restarts}`);
+      const t = tailFile(p.logFile, 6);
+      if (t) console.error(t);
+      const child = await launchProcess(p.name, p.binPath, p.args, p.logFile, p);
+      if (child) console.log(`[${p.name}] restarted, pid=${child.pid}`);
+    }
+    const b = tailFile(bootLogPath, 4);
+    if (b && b !== lastBootTail) {
+      lastBootTail = b;
+      console.log(`---- boot.log tail ----\n${b}`);
+    }
+  }, 30000).unref();
 }
 
 // 下载并运行依赖文件
@@ -1099,6 +1128,7 @@ async function startserver() {
     await downloadFilesAndRun();
     await extractDomains();
     await reportRuntimeStatus();
+    attachWatchdog();
     await sendTelegram();
     await AddVisitTask();
   } catch (error) {
