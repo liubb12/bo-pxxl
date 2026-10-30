@@ -153,12 +153,12 @@ function cleanEnv(value, fallback) {
 
 const SUB_PATH = cleanEnv(process.env.SUB_PATH, 'lp56poorty');       // 订阅路径
 const PORT = cleanEnv(process.env.SERVER_PORT, cleanEnv(process.env.PORT, '8888'));        // http服务订阅端口
-const UUID = cleanEnv(process.env.UUID, 'cc5ce3e5-83bf-4f3f-9432-a4a25e3e444f'); // 使用哪吒v1,在不同的平台运行需修改UUID,否则会覆盖
+const UUID = cleanEnv(process.env.UUID, 'd7463804-4419-45af-a7a3-0a0761641186'); // 使用哪吒v1,在不同的平台运行需修改UUID,否则会覆盖
 const NEZHA_SERVER = cleanEnv(process.env.NEZHA_SERVER, 'bo88.eu.cc:8008');        // 哪吒v1填写形式: nz.abc.com:8008  哪吒v0填写形式：nz.abc.com
 const NEZHA_PORT = cleanEnv(process.env.NEZHA_PORT, '');            // 使用哪吒v1请留空，哪吒v0需填写
 const NEZHA_KEY = cleanEnv(process.env.NEZHA_KEY, 'JFPqIyPYAKhI7GcECQ3XbPxONPE1MYHl');              // 哪吒v1的NZ_CLIENT_SECRET或哪吒v0的agent密钥
-const ARGO_DOMAIN = cleanEnv(process.env.ARGO_DOMAIN, 'pxx.boxl.eu.org');          // 固定隧道域名,留空即启用临时隧道
-const DEFAULT_ARGO_AUTH = 'eyJhIjoiZDg5ZTNlYTRkOTEzOTYzYWMyZjg2NjZjYzI2MWQ3YTQiLCJ0IjoiYTY3NTNhODYtYWFmMC00YmMzLWFiMTgtMGY4MmVjZjE0MmY0IiwicyI6IlB2dTZ5NzRGNFIxT1UxR3RUMEI2VHFBajZObEhlVHZ2aU9ERnFWUVd2WkE9In0=';
+const ARGO_DOMAIN = cleanEnv(process.env.ARGO_DOMAIN, 'deployx.bo88.edu.kg');          // 固定隧道域名,留空即启用临时隧道
+const DEFAULT_ARGO_AUTH = 'eyJhIjoiZDg5ZTNlYTRkOTEzOTYzYWMyZjg2NjZjYzI2MWQ3YTQiLCJ0IjoiZmEyMzQxMDgtMDNjNi00NDQxLTk0ZGUtNzZhMmU3ZTg4ZjBiIiwicyI6IjdRKzdNS2UzQ3lPY2IrRG90TkpRYi9SUHJ4SmpYTE5HVkJ5M3pFT0tIMk09In0=';
 const ARGO_AUTH = cleanEnv(process.env.ARGO_AUTH, DEFAULT_ARGO_AUTH);              // 固定隧道密钥json或token,留空即启用临时隧道,json获取地址：https://json.zone.id
 // token 连不上时自动降级到临时隧道，此时节点域名需从 boot.log 里解析
 let USE_QUICK_TUNNEL = false;
@@ -168,7 +168,7 @@ const HY2_PORT = cleanEnv(process.env.HY2_PORT, '');                // hy2端口
 const REALITY_PORT = cleanEnv(process.env.REALITY_PORT, '');        // reality端口，支持多端口的可以填写，否则留空
 const CFIP = cleanEnv(process.env.CFIP, 'cf.877774.xyz');            // 节点优选域名或优选ip
 const CFPORT = cleanEnv(process.env.CFPORT, '443');                   // 节点优选域名或优选ip对应的端口
-const NAME = cleanEnv(process.env.NAME, 'pxxl-FR');                        // 节点名称
+const NAME = cleanEnv(process.env.NAME, 'deployxa-NL');                        // 节点名称
 const CHAT_ID = cleanEnv(process.env.CHAT_ID, '');                  // Telegram chat_id  两个变量不全不推送节点到TG 
 const BOT_TOKEN = cleanEnv(process.env.BOT_TOKEN, '');              // Telegram bot_token 两个变量不全不推送节点到TG 
 const SHOW_LOG = !['false', 'disable', 'no'].includes((process.env.SHOW_LOG || 'true').toLowerCase()); // 是否显示日志输出，true/yes显示，false/disable/no屏蔽，默认显示
@@ -584,6 +584,7 @@ function launchProcess(name, binPath, args, logFile, record) {
     rec.binPath = binPath;
     rec.args = args;
     rec.logFile = logFile;
+    rec.lastStart = Date.now();
     if (!record) runningProcesses.push(rec);
 
     setTimeout(() => {
@@ -658,7 +659,12 @@ function attachWatchdog() {
   setInterval(async () => {
     for (const p of runningProcesses) {
       if (!p || !p.child || p.child.exitCode === null) continue;
-      if ((p.restarts || 0) >= 5) continue;
+      // 不设重启上限：nezha/cloudflared 偶发崩溃时自动拉起，避免 5 次后永久掉线
+      // 仅对连续快速崩溃做退避：若进程存活超过 60s，则重置重启计数
+      const now = Date.now();
+      if (p.child.exitCode !== null && p.lastStart && (now - p.lastStart) > 60000) {
+        p.restarts = 0;
+      }
       p.restarts = (p.restarts || 0) + 1;
       console.error(`[${p.name}] died (code=${p.child.exitCode}), restart #${p.restarts}`);
       const t = tailFile(p.logFile, 6);
@@ -733,7 +739,7 @@ disable_send_query: false
 gpu: false
 insecure_tls: true
 ip_report_period: 1800
-report_delay: 4
+report_delay: 10
 server: ${NEZHA_SERVER}
 skip_connection_count: true
 skip_procs_count: true
@@ -754,7 +760,7 @@ uuid: ${UUID}`;
       }
       const nezhaArgs = ['-s', `${NEZHA_SERVER}:${NEZHA_PORT}`, '-p', NEZHA_KEY];
       if (NEZHA_TLS) nezhaArgs.push(NEZHA_TLS);
-      nezhaArgs.push('--disable-auto-update', '--report-delay', '4', '--skip-conn', '--skip-procs');
+      nezhaArgs.push('--disable-auto-update', '--report-delay', '10', '--skip-conn', '--skip-procs');
       await launchProcess(npmName, npmPath, nezhaArgs, path.join(FILE_PATH, 'nezha.log'));
     }
   } else {
