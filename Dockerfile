@@ -1,15 +1,16 @@
-FROM node:alpine3.22
+FROM node:alpine
 
-WORKDIR /tmp
+WORKDIR /app
 
-COPY index.js index.html package.json ./
+# 先复制依赖配置文件，利用 Docker 缓存加速构建
+COPY package.json ./
 
-EXPOSE 3000/tcp
+# 只安装必要的依赖，去掉不必要的系统升级和冗余包
+RUN npm install
 
-RUN apk update && apk upgrade &&\
-    apk add --no-cache openssl curl gcompat iproute2 coreutils &&\
-    apk add --no-cache bash &&\
-    chmod +x index.js &&\
-    npm install
+# 复制源码
+COPY index.js index.html ./
+
+EXPOSE 3000
 
 CMD ["node", "index.js"]
