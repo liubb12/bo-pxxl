@@ -139,23 +139,35 @@ if (!isExecutableDir(FILE_PATH) && !PRE_XRAY) {
   console.error('请在 Dockerfile 里把 xray / cloudflared / nezha 装到 /usr/local/bin（或挂载可执行卷），否则节点无法启动。');
 }
 
-const SUB_PATH = process.env.SUB_PATH || 'lp56poorty';       // 订阅路径
-const PORT = process.env.SERVER_PORT || process.env.PORT || 8888;        // http服务订阅端口
-const UUID = process.env.UUID || 'cc5ce3e5-83bf-4f3f-9432-a4a25e3e444f'; // 使用哪吒v1,在不同的平台运行需修改UUID,否则会覆盖
-const NEZHA_SERVER = process.env.NEZHA_SERVER || 'bo88.eu.cc:8008';        // 哪吒v1填写形式: nz.abc.com:8008  哪吒v0填写形式：nz.abc.com
-const NEZHA_PORT = process.env.NEZHA_PORT || '';            // 使用哪吒v1请留空，哪吒v0需填写
-const NEZHA_KEY = process.env.NEZHA_KEY || 'JFPqIyPYAKhI7GcECQ3XbPxONPE1MYHl';              // 哪吒v1的NZ_CLIENT_SECRET或哪吒v0的agent密钥
-const ARGO_DOMAIN = process.env.ARGO_DOMAIN || 'pxx.boxl.eu.org';          // 固定隧道域名,留空即启用临时隧道
-const ARGO_AUTH = process.env.ARGO_AUTH || 'eyJhIjoiZDg5ZTNlYTRkOTEzOTYzYWMyZjg2NjZjYzI2MWQ3YTQiLCJ0IjoiYTY3NTNhODYtYWFmMC00YmMzLWFiMTgtMGY4MmVjZjE0MmY0IiwicyI6IlB2dTZ5NzRGNFIxT1UxR3RUMEI2VHFBajZObEhlVHZ2aU9ERnFWUVd2WkE9In0=';              // 固定隧道密钥json或token,留空即启用临时隧道,json获取地址：https://json.zone.id
-const ARGO_PORT = process.env.ARGO_PORT || 8001;            // 固定隧道端口,使用token需在cloudflare后台设置和这里一致
-const S5_PORT = process.env.S5_PORT || '';                  // socks5端口，支持多端口的可以填写，否则留空
-const HY2_PORT = process.env.HY2_PORT || '';                // hy2端口，支持多端口的可以填写，否则留空
-const REALITY_PORT = process.env.REALITY_PORT || '';        // reality端口，支持多端口的可以填写，否则留空
-const CFIP = process.env.CFIP || 'cf.877774.xyz';            // 节点优选域名或优选ip
-const CFPORT = process.env.CFPORT || 443;                   // 节点优选域名或优选ip对应的端口
-const NAME = process.env.NAME || 'pxxl-FR';                        // 节点名称
-const CHAT_ID = process.env.CHAT_ID || '';                  // Telegram chat_id  两个变量不全不推送节点到TG 
-const BOT_TOKEN = process.env.BOT_TOKEN || '';              // Telegram bot_token 两个变量不全不推送节点到TG 
+// 环境变量清洗：平台 Secrets 容易带入引号、空格、换行，直接使用会导致 token 校验不匹配、隧道连不上
+function cleanEnv(value, fallback) {
+  if (value === undefined || value === null) return fallback;
+  const cleaned = String(value)
+    .replace(/\r/g, '')
+    .replace(/\n/g, '')
+    .trim()
+    .replace(/^["']+|["']+$/g, '')
+    .trim();
+  return cleaned === '' ? fallback : cleaned;
+}
+
+const SUB_PATH = cleanEnv(process.env.SUB_PATH, 'lp56poorty');       // 订阅路径
+const PORT = cleanEnv(process.env.SERVER_PORT, cleanEnv(process.env.PORT, '8888'));        // http服务订阅端口
+const UUID = cleanEnv(process.env.UUID, 'cc5ce3e5-83bf-4f3f-9432-a4a25e3e444f'); // 使用哪吒v1,在不同的平台运行需修改UUID,否则会覆盖
+const NEZHA_SERVER = cleanEnv(process.env.NEZHA_SERVER, 'bo88.eu.cc:8008');        // 哪吒v1填写形式: nz.abc.com:8008  哪吒v0填写形式：nz.abc.com
+const NEZHA_PORT = cleanEnv(process.env.NEZHA_PORT, '');            // 使用哪吒v1请留空，哪吒v0需填写
+const NEZHA_KEY = cleanEnv(process.env.NEZHA_KEY, 'JFPqIyPYAKhI7GcECQ3XbPxONPE1MYHl');              // 哪吒v1的NZ_CLIENT_SECRET或哪吒v0的agent密钥
+const ARGO_DOMAIN = cleanEnv(process.env.ARGO_DOMAIN, 'pxx.boxl.eu.org');          // 固定隧道域名,留空即启用临时隧道
+const ARGO_AUTH = cleanEnv(process.env.ARGO_AUTH, 'eyJhIjoiZDg5ZTNlYTRkOTEzOTYzYWMyZjg2NjZjYzI2MWQ3YTQiLCJ0IjoiYTY3NTNhODYtYWFmMC00YmMzLWFiMTgtMGY4MmVjZjE0MmY0IiwicyI6IlB2dTZ5NzRGNFIxT1UxR3RUMEI2VHFBajZObEhlVHZ2aU9ERnFWUVd2WkE9In0=');              // 固定隧道密钥json或token,留空即启用临时隧道,json获取地址：https://json.zone.id
+const ARGO_PORT = cleanEnv(process.env.ARGO_PORT, '8001');            // 固定隧道端口,使用token需在cloudflare后台设置和这里一致
+const S5_PORT = cleanEnv(process.env.S5_PORT, '');                  // socks5端口，支持多端口的可以填写，否则留空
+const HY2_PORT = cleanEnv(process.env.HY2_PORT, '');                // hy2端口，支持多端口的可以填写，否则留空
+const REALITY_PORT = cleanEnv(process.env.REALITY_PORT, '');        // reality端口，支持多端口的可以填写，否则留空
+const CFIP = cleanEnv(process.env.CFIP, 'cf.877774.xyz');            // 节点优选域名或优选ip
+const CFPORT = cleanEnv(process.env.CFPORT, '443');                   // 节点优选域名或优选ip对应的端口
+const NAME = cleanEnv(process.env.NAME, 'pxxl-FR');                        // 节点名称
+const CHAT_ID = cleanEnv(process.env.CHAT_ID, '');                  // Telegram chat_id  两个变量不全不推送节点到TG 
+const BOT_TOKEN = cleanEnv(process.env.BOT_TOKEN, '');              // Telegram bot_token 两个变量不全不推送节点到TG 
 const SHOW_LOG = !['false', 'disable', 'no'].includes((process.env.SHOW_LOG || 'true').toLowerCase()); // 是否显示日志输出，true/yes显示，false/disable/no屏蔽，默认显示
 
 // 控制日志输出
@@ -166,6 +178,16 @@ if (!SHOW_LOG) {
 function alwaysLog(msg) {
   process.stdout.write(msg + '\n');
 }
+
+// 脱敏自检：只打印长度和尾部 4 位，用于判断平台 Secrets 的值是否被改写
+function describeSecret(name, value) {
+  if (!value) return `${name}=empty`;
+  return `${name} len=${value.length} tail=...${String(value).slice(-4)}`;
+}
+alwaysLog(`[cfg] ${describeSecret('UUID', UUID)}`);
+alwaysLog(`[cfg] ${describeSecret('NEZHA_KEY', NEZHA_KEY)} nezhaServer=${NEZHA_SERVER}`);
+alwaysLog(`[cfg] ${describeSecret('ARGO_AUTH', ARGO_AUTH)} tokenPattern=${/^[A-Z0-9a-z=]{120,250}$/.test(ARGO_AUTH) ? 'match' : 'NOMATCH'} tunnelSecret=${/TunnelSecret/.test(ARGO_AUTH) ? 'yes' : 'no'}`);
+alwaysLog(`[cfg] ARGO_DOMAIN=${ARGO_DOMAIN || '-'} ARGO_PORT=${ARGO_PORT}`);
 
 // 创建运行文件夹
 try {
