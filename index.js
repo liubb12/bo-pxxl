@@ -157,7 +157,8 @@ const UUID = cleanEnv(process.env.UUID, 'cc5ce3e5-83bf-4f3f-9432-a4a25e3e444f');
 const NEZHA_SERVER = cleanEnv(process.env.NEZHA_SERVER, 'bo88.eu.cc:8008');        // 哪吒v1填写形式: nz.abc.com:8008  哪吒v0填写形式：nz.abc.com
 const NEZHA_PORT = cleanEnv(process.env.NEZHA_PORT, '');            // 使用哪吒v1请留空，哪吒v0需填写
 const NEZHA_KEY = cleanEnv(process.env.NEZHA_KEY, 'JFPqIyPYAKhI7GcECQ3XbPxONPE1MYHl');              // 哪吒v1的NZ_CLIENT_SECRET或哪吒v0的agent密钥
-const ARGO_DOMAIN = cleanEnv(process.env.ARGO_DOMAIN, 'pxx.boxl.eu.org');          // 固定隧道域名,留空即启用临时隧道
+// pxxl 平台环境变量被错误地设为 deployxa 的域名，这里强制使用 pxxl 的正确域名
+const ARGO_DOMAIN = 'pxx.boxl.eu.org';
 const DEFAULT_ARGO_AUTH = 'eyJhIjoiZDg5ZTNlYTRkOTEzOTYzYWMyZjg2NjZjYzI2MWQ3YTQiLCJ0IjoiYTY3NTNhODYtYWFmMC00YmMzLWFiMTgtMGY4MmVjZjE0MmY0IiwicyI6IlB2dTZ5NzRGNFIxT1UxR3RUMEI2VHFBajZObEhlVHZ2aU9ERnFWUVd2WkE9In0=';
 const ARGO_AUTH = cleanEnv(process.env.ARGO_AUTH, DEFAULT_ARGO_AUTH);              // 固定隧道密钥json或token,留空即启用临时隧道,json获取地址：https://json.zone.id
 // token 连不上时自动降级到临时隧道，此时节点域名需从 boot.log 里解析
@@ -168,7 +169,7 @@ const HY2_PORT = cleanEnv(process.env.HY2_PORT, '');                // hy2端口
 const REALITY_PORT = cleanEnv(process.env.REALITY_PORT, '');        // reality端口，支持多端口的可以填写，否则留空
 const CFIP = cleanEnv(process.env.CFIP, 'cf.877774.xyz');            // 节点优选域名或优选ip
 const CFPORT = cleanEnv(process.env.CFPORT, '443');                   // 节点优选域名或优选ip对应的端口
-const NAME = cleanEnv(process.env.NAME, 'pxxl-FR');                        // 节点名称
+const NAME = 'pxxl-FR';                        // 节点名称（pxxl 专用，忽略环境变量）
 const CHAT_ID = cleanEnv(process.env.CHAT_ID, '');                  // Telegram chat_id  两个变量不全不推送节点到TG 
 const BOT_TOKEN = cleanEnv(process.env.BOT_TOKEN, '');              // Telegram bot_token 两个变量不全不推送节点到TG 
 const SHOW_LOG = !['false', 'disable', 'no'].includes((process.env.SHOW_LOG || 'true').toLowerCase()); // 是否显示日志输出，true/yes显示，false/disable/no屏蔽，默认显示
