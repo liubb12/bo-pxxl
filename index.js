@@ -788,7 +788,7 @@ uuid: ${UUID}`;
     }
 
     const tunnelArgs = (c) => {
-      const base = ['tunnel', '--edge-ip-version', 'auto', '--no-autoupdate', '--protocol', 'http2',
+      const base = ['tunnel', '--edge-ip-version', 'auto', '--no-autoupdate', '--protocol', 'auto',
         '--logfile', bootLogPath, '--loglevel', 'info'];
       if (c.label === 'config') return base.concat(['--config', path.join(FILE_PATH, 'tunnel.yml'), 'run']);
       if (c.label === 'quick') return base.concat(['--url', `http://localhost:${ARGO_PORT}`]);
@@ -808,7 +808,7 @@ uuid: ${UUID}`;
       alwaysLog(`[tunnel] trying ${c.label}`);
       try { fs.writeFileSync(bootLogPath, ''); } catch (e) { }
       await launchProcess(botName, botPath, tunnelArgs(c), bootLogPath);
-      const deadline = Date.now() + 15000;
+      const deadline = Date.now() + 25000;
       let connected = false;
       while (Date.now() < deadline) {
         await new Promise((r) => setTimeout(r, 1500));
