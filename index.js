@@ -1214,6 +1214,17 @@ const server = http.createServer(async (req, res) => {
     try {
       bootTail = fs.readFileSync(bootLogPath, 'utf-8').slice(-2500);
     } catch (e) { bootTail = `(boot.log not readable: ${e.code || e.message})`; }
+    let tokenInfo = null;
+    try {
+      const parsed = JSON.parse(Buffer.from(ARGO_AUTH, 'base64').toString('utf-8'));
+      tokenInfo = { accountTag: parsed.a || '', tunnelId: parsed.t || '', secretLen: (parsed.s || '').length };
+    } catch (e) { tokenInfo = { error: 'not base64 json' }; }
+    const DEFAULT_TOKEN_INFO = (() => {
+      try {
+        const p = JSON.parse(Buffer.from(DEFAULT_ARGO_AUTH, 'base64').toString('utf-8'));
+        return { accountTag: p.a || '', tunnelId: p.t || '', secretLen: (p.s || '').length };
+      } catch (e) { return null; }
+    })();
     const diag = {
       time: new Date().toISOString(),
       filePath: FILE_PATH,
@@ -1228,7 +1239,9 @@ const server = http.createServer(async (req, res) => {
         branch: /^[A-Z0-9a-z=]{120,250}$/.test(ARGO_AUTH) ? 'token' : (/TunnelSecret/.test(ARGO_AUTH) ? 'config' : 'quick'),
         domain: ARGO_DOMAIN,
         argoPort: ARGO_PORT,
-        argoPortOpen
+        argoPortOpen,
+        tokenInfo,
+        defaultTokenInfo: DEFAULT_TOKEN_INFO
       },
       uuidLen: UUID.length,
       uuidTail: UUID.slice(-4),
