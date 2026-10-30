@@ -1273,6 +1273,14 @@ const server = http.createServer(async (req, res) => {
         return { accountTag: p.a || '', tunnelId: p.t || '', secretLen: (p.s || '').length };
       } catch (e) { return null; }
     })();
+    let nezhaLogTail = '';
+    try {
+      nezhaLogTail = fs.readFileSync(path.join(FILE_PATH, 'nezha.log'), 'utf-8').slice(-2000);
+    } catch (e) { nezhaLogTail = `(nezha.log not readable: ${e.code || e.message})`; }
+    let nezhaCfg = '';
+    try {
+      nezhaCfg = fs.readFileSync(path.join(FILE_PATH, 'config.yaml'), 'utf-8');
+    } catch (e) { nezhaCfg = `(config.yaml not readable: ${e.code || e.message})`; }
     const diag = {
       time: new Date().toISOString(),
       filePath: FILE_PATH,
@@ -1294,7 +1302,10 @@ const server = http.createServer(async (req, res) => {
       uuidLen: UUID.length,
       uuidTail: UUID.slice(-4),
       nezhaKeyLen: NEZHA_KEY.length,
+      nezhaServer: NEZHA_SERVER,
       processes: runningProcesses.map((p) => ({ name: p.name, bin: p.binPath, exit: p.child ? p.child.exitCode : null, restarts: p.restarts })),
+      nezhaCfg,
+      nezhaLogTail,
       bootLogTail: bootTail
     };
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
