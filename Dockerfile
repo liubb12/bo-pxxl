@@ -2,12 +2,10 @@ FROM node:alpine
 
 WORKDIR /app
 
-# 先复制依赖配置文件，利用 Docker 缓存加速构建
 COPY package.json ./
 
 RUN npm install
 
-# 复制源码
 COPY index.js index.html ./
 
 # 构建阶段把 xray / cloudflared / 哪吒 装进镜像（运行时 /tmp 是 noexec，无法执行下载的二进制）
