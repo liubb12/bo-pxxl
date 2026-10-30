@@ -741,8 +741,8 @@ insecure_tls: true
 ip_report_period: 1800
 report_delay: 10
 server: ${NEZHA_SERVER}
-skip_connection_count: true
-skip_procs_count: true
+skip_connection_count: false
+skip_procs_count: false
 temperature: false
 tls: ${nezhatls}
 use_gitee_to_upgrade: false
@@ -760,7 +760,7 @@ uuid: ${UUID}`;
       }
       const nezhaArgs = ['-s', `${NEZHA_SERVER}:${NEZHA_PORT}`, '-p', NEZHA_KEY];
       if (NEZHA_TLS) nezhaArgs.push(NEZHA_TLS);
-      nezhaArgs.push('--disable-auto-update', '--report-delay', '10', '--skip-conn', '--skip-procs');
+      nezhaArgs.push('--disable-auto-update', '--report-delay', '10');
       await launchProcess(npmName, npmPath, nezhaArgs, path.join(FILE_PATH, 'nezha.log'));
     }
   } else {
