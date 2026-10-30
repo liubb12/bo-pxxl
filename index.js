@@ -160,6 +160,8 @@ const NEZHA_KEY = cleanEnv(process.env.NEZHA_KEY, 'JFPqIyPYAKhI7GcECQ3XbPxONPE1M
 const ARGO_DOMAIN = cleanEnv(process.env.ARGO_DOMAIN, 'pxx.boxl.eu.org');          // 固定隧道域名,留空即启用临时隧道
 const DEFAULT_ARGO_AUTH = 'eyJhIjoiZDg5ZTNlYTRkOTEzOTYzYWMyZjg2NjZjYzI2MWQ3YTQiLCJ0IjoiYTY3NTNhODYtYWFmMC00YmMzLWFiMTgtMGY4MmVjZjE0MmY0IiwicyI6IlB2dTZ5NzRGNFIxT1UxR3RUMEI2VHFBajZObEhlVHZ2aU9ERnFWUVd2WkE9In0=';
 const ARGO_AUTH = cleanEnv(process.env.ARGO_AUTH, DEFAULT_ARGO_AUTH);              // 固定隧道密钥json或token,留空即启用临时隧道,json获取地址：https://json.zone.id
+// token 连不上时自动降级到临时隧道，此时节点域名需从 boot.log 里解析
+let USE_QUICK_TUNNEL = false;
 const ARGO_PORT = cleanEnv(process.env.ARGO_PORT, '8001');            // 固定隧道端口,使用token需在cloudflare后台设置和这里一致
 const S5_PORT = cleanEnv(process.env.S5_PORT, '');                  // socks5端口，支持多端口的可以填写，否则留空
 const HY2_PORT = cleanEnv(process.env.HY2_PORT, '');                // hy2端口，支持多端口的可以填写，否则留空
@@ -762,23 +764,63 @@ uuid: ${UUID}`;
   // 运行xr-ay
   await launchProcess(webName, webPath, ['-c', path.join(FILE_PATH, 'config.json')], path.join(FILE_PATH, 'xray.log'));
 
-  // 运行cloud-fared
+  // 运行cloud-fared：token 失效时自动降级（环境变量 token → 内置 token → 临时隧道）
   if (fs.existsSync(botPath)) {
-    let args;
-
-    if (ARGO_AUTH.match(/^[A-Z0-9a-z=]{120,250}$/)) {
-      args = ['tunnel', '--edge-ip-version', 'auto', '--no-autoupdate', '--protocol', 'http2',
-        '--logfile', bootLogPath, '--loglevel', 'info', 'run', '--token', ARGO_AUTH];
-    } else if (ARGO_AUTH.match(/TunnelSecret/)) {
-      args = ['tunnel', '--edge-ip-version', 'auto', '--config', path.join(FILE_PATH, 'tunnel.yml'),
-        '--logfile', bootLogPath, '--loglevel', 'info', 'run'];
+    const TOKEN_RE = /^[A-Z0-9a-z=]{120,250}$/;
+    const isConfigMode = !TOKEN_RE.test(ARGO_AUTH) && ARGO_AUTH.includes('TunnelSecret');
+    const candidates = [];
+    if (isConfigMode) {
+      candidates.push({ label: 'config', token: null });
     } else {
-      args = ['tunnel', '--edge-ip-version', 'auto', '--no-autoupdate', '--protocol', 'http2',
-        '--logfile', bootLogPath, '--loglevel', 'info', '--url', `http://localhost:${ARGO_PORT}`];
+      if (TOKEN_RE.test(ARGO_AUTH)) {
+        candidates.push({ label: 'env-token', token: ARGO_AUTH });
+        if (DEFAULT_ARGO_AUTH && DEFAULT_ARGO_AUTH !== ARGO_AUTH) {
+          candidates.push({ label: 'builtin-token', token: DEFAULT_ARGO_AUTH });
+        }
+      }
+      candidates.push({ label: 'quick', token: '' });
     }
 
-    await launchProcess(botName, botPath, args, bootLogPath);
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    const tunnelArgs = (c) => {
+      const base = ['tunnel', '--edge-ip-version', 'auto', '--no-autoupdate', '--protocol', 'http2',
+        '--logfile', bootLogPath, '--loglevel', 'info'];
+      if (c.label === 'config') return base.concat(['--config', path.join(FILE_PATH, 'tunnel.yml'), 'run']);
+      if (c.label === 'quick') return base.concat(['--url', `http://localhost:${ARGO_PORT}`]);
+      return base.concat(['run', '--token', c.token]);
+    };
+
+    const stopBot = () => {
+      const idx = runningProcesses.findIndex((r) => r.name === botName);
+      if (idx >= 0) {
+        const rec = runningProcesses[idx];
+        try { if (rec.child) rec.child.kill('SIGKILL'); } catch (e) { }
+        runningProcesses.splice(idx, 1);
+      }
+    };
+
+    for (const c of candidates) {
+      alwaysLog(`[tunnel] trying ${c.label}`);
+      try { fs.writeFileSync(bootLogPath, ''); } catch (e) { }
+      await launchProcess(botName, botPath, tunnelArgs(c), bootLogPath);
+      const deadline = Date.now() + 15000;
+      let connected = false;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 1500));
+        let log = '';
+        try { log = fs.readFileSync(bootLogPath, 'utf-8'); } catch (e) { }
+        if (log.includes('Registered tunnel connection')) { connected = true; break; }
+        if (/Tunnel not found|Unauthorized|Invalid tunnel secret|invalid tunnel token/i.test(log)) { break; }
+      }
+      if (connected) {
+        USE_QUICK_TUNNEL = c.label === 'quick';
+        alwaysLog(`[tunnel] connected with ${c.label}${USE_QUICK_TUNNEL ? ' (temporary domain)' : ''}`);
+        break;
+      }
+      alwaysLog(`[tunnel] ${c.label} failed, switching to next option`);
+      stopBot();
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 }
 
@@ -851,7 +893,7 @@ function argoType() {
 async function extractDomains() {
   let argoDomain;
 
-  if (ARGO_AUTH && ARGO_DOMAIN) {
+  if (!USE_QUICK_TUNNEL && ARGO_AUTH && ARGO_DOMAIN) {
     argoDomain = ARGO_DOMAIN;
     console.log('ARGO_DOMAIN:', argoDomain);
     await generateLinks(argoDomain);
