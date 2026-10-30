@@ -1,4 +1,4 @@
-FROM node:alpine
+﻿FROM node:alpine
 
 WORKDIR /app
 
@@ -6,7 +6,7 @@ COPY package.json ./
 
 RUN npm install
 
-ARG CACHEBUST=20261030-43
+ARG CACHEBUST=20261030-44
 RUN echo "cachebust=$CACHEBUST"
 
 COPY index.js index.html ./

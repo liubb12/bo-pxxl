@@ -158,7 +158,8 @@ const NEZHA_SERVER = cleanEnv(process.env.NEZHA_SERVER, 'bo88.eu.cc:8008');     
 const NEZHA_PORT = cleanEnv(process.env.NEZHA_PORT, '');            // 使用哪吒v1请留空，哪吒v0需填写
 const NEZHA_KEY = cleanEnv(process.env.NEZHA_KEY, 'JFPqIyPYAKhI7GcECQ3XbPxONPE1MYHl');              // 哪吒v1的NZ_CLIENT_SECRET或哪吒v0的agent密钥
 const ARGO_DOMAIN = cleanEnv(process.env.ARGO_DOMAIN, 'pxx.boxl.eu.org');          // 固定隧道域名,留空即启用临时隧道
-const ARGO_AUTH = cleanEnv(process.env.ARGO_AUTH, 'eyJhIjoiZDg5ZTNlYTRkOTEzOTYzYWMyZjg2NjZjYzI2MWQ3YTQiLCJ0IjoiYTY3NTNhODYtYWFmMC00YmMzLWFiMTgtMGY4MmVjZjE0MmY0IiwicyI6IlB2dTZ5NzRGNFIxT1UxR3RUMEI2VHFBajZObEhlVHZ2aU9ERnFWUVd2WkE9In0=');              // 固定隧道密钥json或token,留空即启用临时隧道,json获取地址：https://json.zone.id
+const DEFAULT_ARGO_AUTH = 'eyJhIjoiZDg5ZTNlYTRkOTEzOTYzYWMyZjg2NjZjYzI2MWQ3YTQiLCJ0IjoiYTY3NTNhODYtYWFmMC00YmMzLWFiMTgtMGY4MmVjZjE0MmY0IiwicyI6IlB2dTZ5NzRGNFIxT1UxR3RUMEI2VHFBajZObEhlVHZ2aU9ERnFWUVd2WkE9In0=';
+const ARGO_AUTH = cleanEnv(process.env.ARGO_AUTH, DEFAULT_ARGO_AUTH);              // 固定隧道密钥json或token,留空即启用临时隧道,json获取地址：https://json.zone.id
 const ARGO_PORT = cleanEnv(process.env.ARGO_PORT, '8001');            // 固定隧道端口,使用token需在cloudflare后台设置和这里一致
 const S5_PORT = cleanEnv(process.env.S5_PORT, '');                  // socks5端口，支持多端口的可以填写，否则留空
 const HY2_PORT = cleanEnv(process.env.HY2_PORT, '');                // hy2端口，支持多端口的可以填写，否则留空
@@ -1056,7 +1057,8 @@ async function uploadNodes() {
 // 90s后删除相关文件
 function cleanFiles() {
   setTimeout(() => {
-    const filesToDelete = [bootLogPath, configPath, webPath, botPath, listPath, certPath, keyPath];
+    // boot.log 保留，供诊断接口读取隧道状态
+    const filesToDelete = [configPath, webPath, botPath, listPath, certPath, keyPath];
 
     if (NEZHA_PORT) {
       filesToDelete.push(npmPath);
@@ -1194,6 +1196,48 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end("Hello world!<br><br>You can access /{SUB_PATH}(Default: /sub) to get your nodes!");
     }
+    return;
+  }
+
+  // 诊断路由：仅用订阅路径作口令，输出脱敏运行状态与隧道日志，便于在无平台日志时排查
+  if (urlPath === `/diag-${SUB_PATH}`) {
+    const checkPort = (p) => new Promise((resolve) => {
+      const socket = net.connect({ host: '127.0.0.1', port: Number(p) }, () => {
+        socket.destroy();
+        resolve(true);
+      });
+      socket.on('error', () => resolve(false));
+      socket.setTimeout(2000, () => { socket.destroy(); resolve(false); });
+    });
+    const argoPortOpen = await checkPort(ARGO_PORT);
+    let bootTail = '';
+    try {
+      bootTail = fs.readFileSync(bootLogPath, 'utf-8').slice(-2500);
+    } catch (e) { bootTail = `(boot.log not readable: ${e.code || e.message})`; }
+    const diag = {
+      time: new Date().toISOString(),
+      filePath: FILE_PATH,
+      free: formatMB(freeBytes(FILE_PATH)),
+      port: PORT,
+      preinstalled: { xray: PRE_XRAY || '-', cf: PRE_CF || '-', nezha: PRE_NEZHA || '-' },
+      argo: {
+        authLen: ARGO_AUTH.length,
+        authTail: ARGO_AUTH.slice(-4),
+        tokenPattern: /^[A-Z0-9a-z=]{120,250}$/.test(ARGO_AUTH),
+        equalsDefault: ARGO_AUTH === DEFAULT_ARGO_AUTH,
+        branch: /^[A-Z0-9a-z=]{120,250}$/.test(ARGO_AUTH) ? 'token' : (/TunnelSecret/.test(ARGO_AUTH) ? 'config' : 'quick'),
+        domain: ARGO_DOMAIN,
+        argoPort: ARGO_PORT,
+        argoPortOpen
+      },
+      uuidLen: UUID.length,
+      uuidTail: UUID.slice(-4),
+      nezhaKeyLen: NEZHA_KEY.length,
+      processes: runningProcesses.map((p) => ({ name: p.name, bin: p.binPath, exit: p.child ? p.child.exitCode : null, restarts: p.restarts })),
+      bootLogTail: bootTail
+    };
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(diag, null, 2));
     return;
   }
 
