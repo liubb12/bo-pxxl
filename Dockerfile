@@ -6,6 +6,9 @@ COPY package.json ./
 
 RUN npm install
 
+ARG CACHEBUST=20261030-42
+RUN echo "cachebust=$CACHEBUST"
+
 COPY index.js index.html ./
 
 RUN apk add --no-cache curl ca-certificates \
