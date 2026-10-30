@@ -6,7 +6,7 @@ COPY package.json ./
 
 RUN npm install
 
-ARG CACHEBUST=20261030-46
+ARG CACHEBUST=20261030-47
 RUN echo "cachebust=$CACHEBUST"
 
 COPY index.js index.html ./
